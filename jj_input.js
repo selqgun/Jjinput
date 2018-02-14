@@ -23,19 +23,24 @@
         prePopulate: null,
         processPrePopulate: false,
 
+        preventDuplicates: true,   //禁止重复选项
+
         // Display settings
-        hintText: "Type in a search term",
+        hintText: "请输入查询字符",
         tipsText: "请点击输入",
-        noResultsText: "还没有匹配的结果,请输入",
+        noResultsText: "还没有匹配的结果,请重新输入.",
+        alertDuplicatesText: "您选择了重复的选项.",
         searchingText: "数据读取中...",
         deleteText: "&times;",
         animateDropdown: true,
-        theme: null,
+        theme: "facebook",
         zindex: 9999,
         resultsLimit: null,
 
         enableHTML: false,
 
+        //Ljj修改 选择后该选项是否变成灰
+        setReadOnlyWhenSelected: true,
         //Ljj修改 点击时是否显示所有可选项
         showAllItemWhenFocus: true,
         //Ljj修改 最大列表显示长度
@@ -60,13 +65,14 @@
         },
 
         // Tokenization settings
-        tokenLimit: null,
+        tokenLimit: null,      //允许选择项个数
         tokenDelimiter: ",",
-        preventDuplicates: false,
+
 
 
         // Behavioral settings
-        allowFreeTagging: false,
+        allowFreeTagging: true,    //是否支持插入用户输入的自主数据项
+        allowTabOut: false,
 
         // Callbacks
         onResult: null,     //ajax结果处理方法
@@ -243,7 +249,7 @@
         }
 
 
-        // Save the tokens
+        // 已选项的数组 Save the tokens
         var saved_tokens = [];
 
         // Keep track of the number of tokens in the list
@@ -295,14 +301,12 @@
             .blur(function () {
 
                 hide_dropdown();
-                $(this).val("");
-                token_list.removeClass($(input).data("settings").classes.focused);
 
                 if ($(input).data("settings").allowFreeTagging) {
                     add_freetagging_tokens();
-                } else {
-                    $(this).val("");
                 }
+                    $(this).val("");
+
                 token_list.removeClass($(input).data("settings").classes.focused);
             })
             .bind("keyup keydown blur update", resize_input)
@@ -351,19 +355,25 @@
                             }
 
                         }else{
-                            var dropdown_item = null;
 
-                            if(event.keyCode === KEY.DOWN || event.keyCode === KEY.RIGHT) {
-                                dropdown_item = $(selected_dropdown_item).next();
-                            } else {
-                                dropdown_item = $(selected_dropdown_item).prev();
+                            if(!dropdown.is(":hidden")){
+                                var dropdown_item = null;
+
+                                if(event.keyCode === KEY.DOWN || event.keyCode === KEY.RIGHT) {
+                                    dropdown_item = $(selected_dropdown_item).next();
+                                } else {
+                                    dropdown_item = $(selected_dropdown_item).prev();
+                                }
+
+                                if(dropdown_item.length) {
+                                    select_dropdown_item(dropdown_item);
+                                }
+                            }else{
+                                do_search();
                             }
 
-                            if(dropdown_item.length) {
-                                select_dropdown_item(dropdown_item);
-                            }
+
                         }
-                        return false;
                         break;
 
                     case KEY.BACKSPACE:
@@ -394,7 +404,19 @@
                             add_token($(selected_dropdown_item).data("tokeninput"));
                             hidden_input.change();
                         } else {
-                            add_freetagging_tokens();
+
+                            if ($(input).data("settings").allowFreeTagging) {
+                                if($(input).data("settings").allowTabOut && $(this).val() === "") {
+                                    return true;
+                                } else {
+                                    add_freetagging_tokens();
+                                }
+                            } else {
+                                $(this).val("");
+                                if($(input).data("settings").allowTabOut) {
+                                    return true;
+                                }
+                            }
                             event.stopPropagation();
                             event.preventDefault();
                         }
@@ -664,7 +686,7 @@
                 var token_data = item;
                 $.data($this_token.get(0), "tokeninput", item);
 
-                // Save this token for duplicate checking
+                // 添加到已选项数组中 Save this token for duplicate checking
                 saved_tokens = saved_tokens.slice(0,selected_token_index).concat([token_data]).concat(saved_tokens.slice(selected_token_index));
                 selected_token_index++;
 
@@ -693,7 +715,7 @@
                 token_list.children().each(function () {
                     var existing_token = $(this);
                     var existing_data = $.data(existing_token.get(0), "tokeninput");
-                    if(existing_data && existing_data[$(input).data("settings").tokenValue] === item[$(input).data("settings").tokenValue]) {
+                    if(existing_data && existing_data[$(input).data("settings").tokenValue] == item[$(input).data("settings").tokenValue]) {
                         found_existing_token = existing_token;
                         return false;
                     }
@@ -701,10 +723,10 @@
 
                 if(found_existing_token) {
                     select_token(found_existing_token);
-                    input_token.insertAfter(found_existing_token);
+                    deselect_token(found_existing_token, POSITION.END);
                     focus_with_timeout(input_box);
                     //LJJ修改 提示选择重复的记录
-                    alert("您选择了重复的选项");
+                    alert($(input).data("settings").alertDuplicatesText);
                     hide_dropdown(true);
                     return;
                 }
@@ -943,6 +965,12 @@
                     results = results.slice(0, $(input).data("settings").resultsLimit);
                 }
 
+                //设置已选项的id Map
+                var selectedMap = {};
+                $.each(saved_tokens,function(index, selectedToken) {
+                    selectedMap[selectedToken[$(input).data("settings").tokenValue]] = selectedToken[$(input).data("settings").tokenValue];
+                });
+
                 $.each(results, function(index, value) {
 
                     var this_li = $(input).data("settings").resultsFormatter(value);
@@ -953,9 +981,16 @@
 
                     var readonly = value.readonly === true ? true : false;
 
+                    //选择后该选项是否变成灰
+                    var selectedFlag = false;
+                    if($(input).data("settings").setReadOnlyWhenSelected){
+                        if(selectedMap[value[$(input).data("settings").tokenValue]] != null){
+                            selectedFlag = true;
+                        }
+                    }
 
-                    //LJJ修改 如果选项是只读,就显示灰色字的样式
-                    if(readonly){
+                    //LJJ修改 如果选项是只读或已被选择,就显示灰色字的样式
+                    if(readonly || selectedFlag){
                         if(index % 2) {
                             this_li.addClass($(input).data("settings").classes.dropdownItemReadonly);
                         } else {
@@ -969,7 +1004,8 @@
                         }
                     }
 
-                    if(index === 0) {
+                    //默认选中第一项
+                    if(index == 0) {
                         select_dropdown_item(this_li);
                     }
 
@@ -990,6 +1026,7 @@
                 if($(input).data("settings").noResultsText) {
                     dropdown.html("<p>" + escapeHTML($(input).data("settings").noResultsText) + "</p>");
 
+                    selected_dropdown_item = null;
                     //可见时才显示下拉
                     if(!$(input).data("settings").reallyOutFlag && $(input_box).is(":visible")) {
                         show_dropdown();
