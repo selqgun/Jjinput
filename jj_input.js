@@ -47,12 +47,25 @@
         maxHeight:null,
         //Ljj修改 控件指定宽度
         maxWidth:null,
-        //Ljj修改 增加ajax读取参数
+
+        /**Ljj修改 增加ajax读取参数
+         * ajaxParameterMap为json对象 key为参数名,将传给ajax请求进行查询
+         * value为取该参数值的dom控件的name
+         */
         ajaxParameterMap: null,
+
+        /**Ljj修改 增加扩展的除id之外的额外属性值
+         * elementMap为json对象 key为属性名,与传入的可选对象属性对应
+         * value为存值的dom控件的name
+         */
+        elementMap:null,
+
+
         //是否使用ajax查询缓存
         ajaxCache:true,
 
         reallyOutFlag:true,
+
 
         resultsFormatter: function(item) {
             var string = item[this.propertyToSearch];
@@ -71,7 +84,7 @@
 
 
         // Behavioral settings
-        allowFreeTagging: true,    //是否支持插入用户输入的自主数据项
+        allowFreeTagging: false,    //是否支持插入用户输入的自主数据项
         allowTabOut: false,
 
         // Callbacks
@@ -251,6 +264,9 @@
 
         // 已选项的数组 Save the tokens
         var saved_tokens = [];
+
+        //存放可选数据的Map对象,以id为key
+        var dataMap = {};
 
         // Keep track of the number of tokens in the list
         var token_count = 0;
@@ -555,6 +571,7 @@
             });
         }
 
+        //添加默认已选项
         this.add = function(item) {
             add_token(item);
         }
@@ -681,10 +698,16 @@
                         }
                     });
 
+                //Ljj修改 如果有扩展的数据保存控件,就把可选对象整个存起来供后面匹配用
+                if($(input).data("settings").elementMap!=null){
+                    dataMap[item[$(input).data("settings").tokenValue]] = item;
+                }
+
 
                 // Store data on the token
                 var token_data = item;
                 $.data($this_token.get(0), "tokeninput", item);
+
 
                 // 添加到已选项数组中 Save this token for duplicate checking
                 saved_tokens = saved_tokens.slice(0,selected_token_index).concat([token_data]).concat(saved_tokens.slice(selected_token_index));
@@ -851,6 +874,17 @@
                 return el[$(input).data("settings").tokenValue];
             });
 
+            //Ljj修改 为扩展的数据控件写入已选数据
+            if($(input).data("settings").elementMap!=null){
+                var elementMap = $(input).data("settings").elementMap;
+                for(var key in elementMap) {
+                    var key_values = $.map(token_values, function (val) {
+                        return dataMap[val]!=null?dataMap[val][key]:"";
+                    });
+                    $("[name="+ elementMap[key] +"]").val(key_values.join($(input).data("settings").tokenDelimiter));
+                }
+            }
+
             hidden_input.val(token_values.join($(input).data("settings").tokenDelimiter));
         }
 
@@ -897,7 +931,7 @@
                 dropdown.css({
                     height:$(input).data("settings").maxHeight,
                     overflow:"auto"
-                })
+                });
                 //dropdown.html('<iframe style="position:absolute; z-index:-1;" frameborder="0" width="100%" height="'+ $(input).data("settings").maxHeight +'" scrolling="no" src="about:blank"></iframe>')
             }
         }
@@ -937,6 +971,7 @@
             return template.replace(new RegExp("(?![^&;]+;)(?!<[^<>]*)(" + regexp_escape(value) + ")(?![^<>]*>)(?![^&;]+;)", "g"), highlight_term(value, term));
         }
 
+        //monitor(populate_dropdown);
         // Populate the results dropdown with some results
         function populate_dropdown (query, results) {
 
@@ -974,6 +1009,11 @@
                 $.each(results, function(index, value) {
 
                     var this_li = $(input).data("settings").resultsFormatter(value);
+
+                    //Ljj修改 如果有扩展的数据保存控件,就把可选对象整个存起来供后面匹配用
+                    if($(input).data("settings").elementMap!=null){
+                        dataMap[value[$(input).data("settings").tokenValue]] = value;
+                    }
 
                     this_li = find_value_and_highlight_term(this_li ,value[$(input).data("settings").propertyToSearch], query);
 
@@ -1120,12 +1160,6 @@
                         }
                     }
 
-                    // if(ajaxParameterMap!=null && !ajaxParameterMap.isEmpty()){
-                    //     var keySet = ajaxParameterMap.keys();
-                    //     for(var qq=0;qq<keySet.length;qq++){
-                    //         ajax_params.data[keySet[qq]] = $.trim($("[name="+ajaxParameterMap.get(keySet[qq]) +"]").val());
-                    //     }
-                    // }
 
 
                     // Prepare the request
