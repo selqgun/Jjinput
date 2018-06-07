@@ -84,7 +84,7 @@
 
 
         // Behavioral settings
-        allowFreeTagging: false,    //是否支持插入用户输入的自主数据项
+        allowFreeTagging: false,    //是否支持插入用户手工输入的自主数据项
         allowTabOut: false,
 
         // Callbacks
@@ -92,6 +92,7 @@
         onCachedResult: null,
         onAdd: null,
         onFreeTaggingAdd: null,
+        onBeforeDelete: null,     //删除已选项时执行的函数,返回false时不执行删除操作,返回true可以删除
         onDelete: null,
         onReady: null,
 
@@ -202,6 +203,11 @@
         },
         toggleDisabled: function(disable) {
             this.data("tokenInputObject").toggleDisabled(disable);
+            return this;
+        },
+        //Ljj新增销毁控件的方法
+        destory: function() {
+            this.data("tokenInputObject").destory();
             return this;
         },
         setOptions: function(options){
@@ -462,6 +468,10 @@
                 input_box.blur();
             });
 
+
+        //保存原始输入框id
+        $(input).data("settings").orginalId = input.id;
+
         // Keep a reference to the selected token and dropdown item
         var selected_token = null;
         var selected_token_index = 0;
@@ -574,6 +584,7 @@
         //添加默认已选项
         this.add = function(item) {
             add_token(item);
+            input_box.blur();
         }
 
         this.updateData = function(result) {
@@ -607,6 +618,11 @@
 
         this.toggleDisabled = function(disable) {
             toggleDisabled(disable);
+        }
+
+        //Ljj新增销毁控件的方法
+        this.destory = function() {
+            $("[name="+ $(input).data("settings").orginalId +"_ul]").remove();
         }
 
         //
@@ -832,6 +848,12 @@
             // Remove the id from the saved list
             var token_data = $.data(token.get(0), "tokeninput");
             var callback = $(input).data("settings").onDelete;
+            var onBeforeDelete = $(input).data("settings").onBeforeDelete;
+
+            //LJJ修改 如果调用函数返回false,就不执行删除操作,直接返回.
+            if($.isFunction(onBeforeDelete) && !onBeforeDelete.call(hidden_input,token_data)) {
+                return;
+            }
 
             var index = token.prevAll().length;
             if(index > selected_token_index) index--;
